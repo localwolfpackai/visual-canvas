@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canvas — Lupo Studios</title>
+<style>
+  /* ── Reset & Base ────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  @property --glow-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+
+  :root {
+    --canvas-bg: #FDF6EC;
+    --canvas-dot: #E8DFD0;
+    --card-bg: rgba(255, 255, 255, 0.82);
+    --card-border: rgba(0, 0, 0, 0.06);
+    --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+    --card-shadow-lift: 0 8px 32px rgba(0, 0, 0, 0.10), 0 2px 8px rgba(0, 0, 0, 0.06);
+    --sticky-yellow: #FEF3C7;
+    --sticky-yellow-border: #F59E0B;
+    --sticky-green: #D9F2E0;
+    --sticky-green-border: #34D399;
+    --sticky-blue: #DBEAFE;
+    --sticky-blue-border: #60A5FA;
+    --sticky-pink: #FCE7F3;
+    --sticky-pink-border: #F472B6;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --text: #1a1a1a;
+    --text-muted: #6b7280;
+    --text-light: #9ca3af;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --toolbar-height: 56px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: var(--font-sans);
+    color: var(--text);
+    background: var(--canvas-bg);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Canvas ──────────────────────────────────── */
+  #canvas {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    cursor: grab;
+    /* DESIGN: Dot grid gives spatial reference without being heavy */
+    background-image: radial-gradient(circle, var(--canvas-dot) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  #canvas.panning { cursor: grabbing; }
+
+  #canvas-inner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    transform-origin: 0 0;
+  }
+
+  /* ── Toolbar ─────────────────────────────────── */
+  #toolbar {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 14px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 4px rgba(0, 0, 0, 0.04);
+  }
+
+  .toolbar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                color 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .toolbar-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text);
+  }
+
+  .toolbar-btn:active {
+    background: rgba(0, 0, 0, 0.08);
+    transform: scale(0.97);
+  }
+
+  /* DESIGN: Active state for sticker tray toggle */
+  .toolbar-btn.active {
+    background: rgba(37, 99, 235, 0.08);
+    color: var(--accent);
+  }
+
+  .toolbar-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 1.75;
+  }
+
+  .toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(0, 0, 0, 0.08);
+    margin: 0 4px;
+  }
+
+  #zoom-display {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-light);
+    padding: 0 8px;
+    min-width: 48px;
+    text-align: center;
+    user-select: none;
+  }
+
+  /* ── Sticker Tray ───────────────────────────── */
+  #sticker-tray {
+    position: fixed;
+    top: 76px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    z-index: 999;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  #sticker-tray.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .sticker-tray-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    transition: background 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+  }
+
+  .sticker-tray-item:hover {
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transform: scale(1.03);
+  }
+
+  .sticker-tray-item:active {
+    transform: scale(0.97);
+  }
+
+  .sticker-tray-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Cards (shared) ──────────────────────────── */
+  .card {
+    position: absolute;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--card-shadow);
+    transition: box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+    cursor: grab;
+  }
+
+  .card:hover {
+    box-shadow: var(--card-shadow-lift);
+  }
+
+  .card.dragging {
+    box-shadow: var(--card-shadow-lift);
+    transform: scale(1.02) rotate(0.5deg);
+    z-index: 999 !important;
+    cursor: grabbing;
+    transition: box-shadow 0.15s, transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  }
+
+  /* ── Panel Card ──────────────────────────────── */
+  .card-panel {
+    background: var(--card-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--card-border);
+    padding: 20px 22px;
+    min-width: 260px;
+    max-width: 400px;
+  }
+
+  .card-panel .card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  }
+
+  .card-panel .card-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .card-panel .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  .card-panel .card-subtitle {
+    font-size: 11px;
+    color: var(--text-light);
+    margin-top: 1px;
+  }
+
+  .card-panel .card-body {
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text-muted);
+  }
+
+  .card-panel .card-body a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .card-panel .card-body a:hover { text-decoration: underline; }
+
+  .card-panel .card-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+    margin: 2px 2px 2px 0;
+  }
+
+  .tag-blue { background: #DBEAFE; color: #1E40AF; }
+  .tag-green { background: #D1FAE5; color: #065F46; }
+  .tag-amber { background: #FEF3C7; color: #92400E; }
+  .tag-pink { background: #FCE7F3; color: #9D174D; }
+  .tag-gray { background: #F3F4F6; color: #374151; }
+
+  /* ── Sticky Note ─────────────────────────────── */
+  .card-sticky {
+    padding: 18px 20px;
+    min-width: 180px;
+    max-width: 260px;
+    border: none;
+    border-radius: 4px;
+    /* DESIGN: Slight rotation gives handmade feel */
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .card-sticky.dragging {
+    transform: scale(1.04) rotate(1deg);
+  }
+
+  .sticky-yellow { background: var(--sticky-yellow); }
+  .sticky-green { background: var(--sticky-green); }
+  .sticky-blue { background: var(--sticky-blue); }
+  .sticky-pink { background: var(--sticky-pink); }
+
+  .card-sticky .sticky-title {
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 8px;
+    opacity: 0.7;
+  }
+
+  .card-sticky ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .card-sticky li {
+    padding: 3px 0;
+    font-size: 13px;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .card-sticky li::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.3;
+    margin-top: 7px;
+    flex-shrink: 0;
+  }
+
+  .card-sticky .check-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 13px;
+  }
+
+  .card-sticky .check-item input[type="checkbox"] {
+    margin-top: 2px;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* ── Diagram Card ────────────────────────────── */
+  .card-diagram {
+    background: var(--card-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--card-border);
+    padding: 24px;
+    min-width: 420px;
+  }
+
+  .diagram-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 18px;
+    color: var(--text);
+  }
+
+  .diagram-flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .diagram-node {
+    padding: 10px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    border: 2px solid;
+    background: white;
+    line-height: 1.35;
+  }
+
+  .diagram-node small {
+    display: block;
+    font-weight: 400;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .diagram-arrow {
+    width: 32px;
+    height: 2px;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .diagram-arrow::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 8px;
+    height: 2px;
+    background: #9CA3AF;
+  }
+
+  .diagram-arrow::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: -4px;
+    border: 5px solid transparent;
+    border-left: 6px solid #9CA3AF;
+  }
+
+  /* ── Section Label ───────────────────────────── */
+  .card-label {
+    background: transparent;
+    box-shadow: none;
+    padding: 0;
+    cursor: grab;
+  }
+
+  .card-label:hover { box-shadow: none; }
+
+  .card-label h2 {
+    font-size: clamp(1.5rem, 3vw, 2.2rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    color: var(--text);
+    opacity: 0.12;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  /* ── AI Model Sticker ───────────────────────── */
+  .card-sticker {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 36px;
+    padding: 0 14px 0 0;
+    background: rgba(255, 255, 255, 0.88);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 20px;
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+    white-space: nowrap;
+    min-width: auto;
+  }
+
+  .card-sticker:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10), 0 1px 4px rgba(0, 0, 0, 0.06);
+  }
+
+  .card-sticker.dragging {
+    transform: scale(1.06) rotate(2deg);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  }
+
+  .sticker-accent {
+    width: 4px;
+    height: 100%;
+    border-radius: 20px 0 0 20px;
+    flex-shrink: 0;
+  }
+
+  .sticker-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .sticker-name {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  /* ── Connector Lines ─────────────────────────── */
+  .connector-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .connector-line {
+    stroke: #D1D5DB;
+    stroke-width: 1.5;
+    fill: none;
+    stroke-dasharray: 6 4;
+  }
+
+  /* ── Minimap ─────────────────────────────────── */
+  #minimap {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    width: 160px;
+    height: 100px;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: var(--radius-md);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    z-index: 1000;
+    overflow: hidden;
+  }
+
+  #minimap-viewport {
+    position: absolute;
+    border: 1.5px solid var(--accent);
+    border-radius: 2px;
+    background: rgba(37, 99, 235, 0.06);
+    pointer-events: none;
+  }
+
+  .minimap-dot {
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    border-radius: 1px;
+    background: rgba(0, 0, 0, 0.2);
+  }
+
+  /* ── Help badge ──────────────────────────────── */
+  #help-badge {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--text-light);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    user-select: none;
+  }
+
+  #help-badge kbd {
+    display: inline-flex;
+    padding: 1px 5px;
+    background: #F3F4F6;
+    border: 1px solid #E5E7EB;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ── Entrance animation ──────────────────────── */
+  @keyframes card-enter {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .card {
+    animation: card-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+
+  .card:nth-child(1) { animation-delay: 0.02s; }
+  .card:nth-child(2) { animation-delay: 0.06s; }
+  .card:nth-child(3) { animation-delay: 0.10s; }
+  .card:nth-child(4) { animation-delay: 0.14s; }
+  .card:nth-child(5) { animation-delay: 0.18s; }
+  .card:nth-child(6) { animation-delay: 0.22s; }
+  .card:nth-child(7) { animation-delay: 0.26s; }
+  .card:nth-child(8) { animation-delay: 0.30s; }
+  .card:nth-child(9) { animation-delay: 0.34s; }
+  .card:nth-child(10) { animation-delay: 0.38s; }
+  .card:nth-child(11) { animation-delay: 0.42s; }
+  .card:nth-child(12) { animation-delay: 0.46s; }
+  .card:nth-child(13) { animation-delay: 0.50s; }
+  .card:nth-child(14) { animation-delay: 0.54s; }
+  .card:nth-child(15) { animation-delay: 0.58s; }
+  .card:nth-child(16) { animation-delay: 0.62s; }
+</style>
+</head>
+<body>
+
+<!-- ── Toolbar ──────────────────────────────────── -->
+<div id="toolbar">
+  <button class="toolbar-btn" onclick="addCard('panel')" title="Add card">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
+    Card
+  </button>
+  <button class="toolbar-btn" onclick="addCard('sticky')" title="Add sticky note">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v4a2 2 0 0 0 2 2h4"/></svg>
+    Sticky
+  </button>
+  <button class="toolbar-btn" onclick="addCard('label')" title="Add section label">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+    Label
+  </button>
+  <div class="toolbar-divider"></div>
+  <button class="toolbar-btn" id="sticker-toggle" onclick="toggleStickerTray()" title="AI model stickers">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+    Sticker
+  </button>
+  <div class="toolbar-divider"></div>
+  <button class="toolbar-btn" onclick="resetView()" title="Reset view">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+    Reset
+  </button>
+  <span id="zoom-display">100%</span>
+</div>
+
+<!-- ── Sticker Tray ────────────────────────────── -->
+<div id="sticker-tray" role="menu" aria-label="AI model stickers">
+  <button class="sticker-tray-item" onclick="addSticker('claude')" role="menuitem">
+    <span class="sticker-tray-dot" style="background: #D97706;"></span>
+    Claude
+  </button>
+  <button class="sticker-tray-item" onclick="addSticker('gpt')" role="menuitem">
+    <span class="sticker-tray-dot" style="background: #10A37F;"></span>
+    GPT
+  </button>
+  <button class="sticker-tray-item" onclick="addSticker('gemini')" role="menuitem">
+    <span class="sticker-tray-dot" style="background: #4285F4;"></span>
+    Gemini
+  </button>
+  <button class="sticker-tray-item" onclick="addSticker('llama')" role="menuitem">
+    <span class="sticker-tray-dot" style="background: #7C3AED;"></span>
+    Llama
+  </button>
+  <button class="sticker-tray-item" onclick="addSticker('mistral')" role="menuitem">
+    <span class="sticker-tray-dot" style="background: #F7931E;"></span>
+    Mistral
+  </button>
+  <button class="sticker-tray-item" onclick="addSticker('grok')" role="menuitem">
+    <span class="sticker-tray-dot" style="background: #1a1a1a;"></span>
+    Grok
+  </button>
+  <button class="sticker-tray-item" onclick="addSticker('copilot')" role="menuitem">
+    <span class="sticker-tray-dot" style="background: #000000;"></span>
+    Copilot
+  </button>
+  <button class="sticker-tray-item" onclick="addSticker('codex')" role="menuitem">
+    <span class="sticker-tray-dot" style="background: #10A37F;"></span>
+    Codex
+  </button>
+</div>
+
+<!-- ── Canvas ───────────────────────────────────── -->
+<div id="canvas">
+  <div id="canvas-inner">
+
+    <!-- ─── Section: App Pile ──────────────────── -->
+    <div class="card card-label" style="left: 60px; top: 30px;" data-id="label-apps">
+      <h2>The App Pile</h2>
+    </div>
+
+    <!-- AI Coding Tools -->
+    <div class="card card-panel" style="left: 80px; top: 120px; width: 320px;" data-id="ai-tools">
+      <div class="card-header">
+        <div class="card-icon" style="background: #EFF6FF;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2563EB" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+        </div>
+        <div>
+          <div class="card-title">AI Coding Tools</div>
+          <div class="card-subtitle">Terminal agents & IDEs</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <span class="card-tag tag-blue">Claude Code</span>
+        <span class="card-tag tag-blue">Codex CLI</span>
+        <span class="card-tag tag-green">Gemini CLI</span>
+        <span class="card-tag tag-gray">OpenCode</span>
+        <span class="card-tag tag-amber">Cursor</span>
+        <span class="card-tag tag-pink">Windsurf</span>
+      </div>
+    </div>
+
+    <!-- Design Tools -->
+    <div class="card card-panel" style="left: 80px; top: 340px; width: 300px;" data-id="design-tools">
+      <div class="card-header">
+        <div class="card-icon" style="background: #FDF2F8;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EC4899" stroke-width="2"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="15.5" r="2.5"/><circle cx="8.5" cy="15.5" r="2.5"/><path d="M13.5 9v.5a4 4 0 0 1-4 4H8.5M13.5 9a4 4 0 0 1 4 4v2.5"/></svg>
+        </div>
+        <div>
+          <div class="card-title">Design / Visual</div>
+          <div class="card-subtitle">Spatial tools & canvas</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <span class="card-tag tag-pink">Paper</span>
+        <span class="card-tag tag-blue">Figma</span>
+        <span class="card-tag tag-amber">Excalidraw</span>
+        <span class="card-tag tag-green">tldraw</span>
+      </div>
+    </div>
+
+    <!-- Architecture Diagram -->
+    <div class="card card-diagram" style="left: 460px; top: 100px; width: 520px;" data-id="arch-diagram">
+      <div class="diagram-title">Current Stack</div>
+      <div class="diagram-flow">
+        <div class="diagram-node" style="border-color: #60A5FA; color: #1E40AF;">
+          Claude Code
+          <small>orchestrator</small>
+        </div>
+        <div class="diagram-arrow"></div>
+        <div class="diagram-node" style="border-color: #F59E0B; color: #92400E;">
+          MCP Servers
+          <small>github, memory, paper</small>
+        </div>
+        <div class="diagram-arrow"></div>
+        <div class="diagram-node" style="border-color: #34D399; color: #065F46;">
+          Projects
+          <small>~/Projects/*</small>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sticky: Want to Try -->
+    <div class="card card-sticky sticky-yellow" style="left: 470px; top: 290px; transform: rotate(-1.5deg);" data-id="sticky-try">
+      <div class="sticky-title">Want to try</div>
+      <ul>
+        <li>Paper MCP for spatial design</li>
+        <li>Gemini CLI deep dive</li>
+        <li>tldraw as whiteboard</li>
+        <li>Obsidian Canvas mode</li>
+      </ul>
+    </div>
+
+    <!-- Sticky: Active Now -->
+    <div class="card card-sticky sticky-green" style="left: 710px; top: 280px; transform: rotate(1deg);" data-id="sticky-active">
+      <div class="sticky-title">Active</div>
+      <ul>
+        <li>Claude Code (main driver)</li>
+        <li>Figma + MCP</li>
+        <li>Obsidian vault</li>
+        <li>GitHub repos cleanup</li>
+      </ul>
+    </div>
+
+    <!-- Section: Life ──────────────────────────── -->
+    <div class="card card-label" style="left: 60px; top: 530px;" data-id="label-life">
+      <h2>Life Inventory</h2>
+    </div>
+
+    <!-- Sticky: TODOs -->
+    <div class="card card-sticky sticky-blue" style="left: 80px; top: 620px; transform: rotate(0.5deg); width: 220px;" data-id="sticky-todos">
+      <div class="sticky-title">TODOs</div>
+      <div class="check-item"><input type="checkbox" aria-label="Organize Desktop"><span>Organize Desktop</span></div>
+      <div class="check-item"><input type="checkbox" aria-label="Vault playbook synthesis"><span>Vault playbook synthesis</span></div>
+      <div class="check-item"><input type="checkbox" aria-label="Portfolio site v1"><span>Portfolio site v1</span></div>
+      <div class="check-item"><input type="checkbox" aria-label="Set up cowork/life"><span>Set up cowork/life</span></div>
+    </div>
+
+    <!-- Panel: Notes -->
+    <div class="card card-panel" style="left: 340px; top: 580px; width: 340px;" data-id="notes-space">
+      <div class="card-header">
+        <div class="card-icon" style="background: #FEF3C7;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        </div>
+        <div>
+          <div class="card-title">Scratch Space</div>
+          <div class="card-subtitle">Drop ideas here</div>
+        </div>
+      </div>
+      <div class="card-body" style="min-height: 80px; font-style: italic; color: var(--text-light);">
+        Send me apps, links, ideas — I'll add them as cards on this canvas or save to memory if they're worth keeping.
+      </div>
+    </div>
+
+    <!-- Sticky: Quick Ref -->
+    <div class="card card-sticky sticky-pink" style="left: 730px; top: 560px; transform: rotate(-0.8deg);" data-id="sticky-ref">
+      <div class="sticky-title">Quick Ref</div>
+      <ul>
+        <li>cowork/life → life stuff</li>
+        <li>00-inbox → unsorted</li>
+        <li>01-experiments → tinkering</li>
+        <li>Agents/ → automation</li>
+      </ul>
+    </div>
+
+    <!-- Panel: How This Works -->
+    <div class="card card-panel" style="left: 460px; top: 760px; width: 360px;" data-id="how-it-works">
+      <div class="card-header">
+        <div class="card-icon" style="background: #EDE9FE;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7C3AED" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+        </div>
+        <div>
+          <div class="card-title">How This Canvas Works</div>
+        </div>
+      </div>
+      <div class="card-body">
+        <strong>Drag</strong> cards to rearrange.<br>
+        <strong>Scroll</strong> to zoom in/out.<br>
+        <strong>Click + drag</strong> background to pan.<br>
+        <strong>Toolbar</strong> to add new cards.<br><br>
+        This is a living board — we'll build it out as you send me stuff.
+      </div>
+    </div>
+
+    <!-- ─── Pre-placed AI Model Stickers ──────── -->
+    <!-- DESIGN: Stickers placed near relevant diagram/card areas for attribution context -->
+    <div class="card card-sticker" style="left: 480px; top: 60px;" data-id="sticker-claude-pre" data-model="claude">
+      <div class="sticker-accent" style="background: #D97706;"></div>
+      <div class="sticker-dot" style="background: #D97706;"></div>
+      <span class="sticker-name">Claude</span>
+    </div>
+
+    <div class="card card-sticker" style="left: 168px; top: 84px;" data-id="sticker-gpt-pre" data-model="gpt">
+      <div class="sticker-accent" style="background: #10A37F;"></div>
+      <div class="sticker-dot" style="background: #10A37F;"></div>
+      <span class="sticker-name">GPT</span>
+    </div>
+
+    <div class="card card-sticker" style="left: 240px; top: 84px;" data-id="sticker-gemini-pre" data-model="gemini">
+      <div class="sticker-accent" style="background: #4285F4;"></div>
+      <div class="sticker-dot" style="background: #4285F4;"></div>
+      <span class="sticker-name">Gemini</span>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Minimap ──────────────────────────────────── -->
+<div id="minimap">
+  <div id="minimap-viewport"></div>
+</div>
+
+<!-- ── Help Badge ──────────────────────────────── -->
+<div id="help-badge">
+  <kbd>Scroll</kbd> zoom
+  &nbsp;&middot;&nbsp;
+  <kbd>Drag</kbd> pan
+</div>
+
+<script>
+// ── State ──────────────────────────────────────
+let panX = 0, panY = 0, zoom = 1;
+let isPanning = false, panStartX = 0, panStartY = 0;
+let dragTarget = null, dragOffsetX = 0, dragOffsetY = 0;
+let highestZ = 10;
+let stickerTrayOpen = false;
+
+const canvas = document.getElementById('canvas');
+const inner = document.getElementById('canvas-inner');
+const zoomDisplay = document.getElementById('zoom-display');
+
+// ── AI Model Definitions ──────────────────────
+const AI_MODELS = {
+  claude:  { name: 'Claude',  color: '#D97706' },
+  gpt:     { name: 'GPT',     color: '#10A37F' },
+  gemini:  { name: 'Gemini',  color: '#4285F4' },
+  llama:   { name: 'Llama',   color: '#7C3AED' },
+  mistral: { name: 'Mistral', color: '#F7931E' },
+  grok:    { name: 'Grok',    color: '#1a1a1a' },
+  copilot: { name: 'Copilot', color: '#000000' },
+  codex:   { name: 'Codex',   color: '#10A37F' }
+};
+
+// ── Transform ──────────────────────────────────
+function applyTransform() {
+  inner.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  zoomDisplay.textContent = Math.round(zoom * 100) + '%';
+  updateMinimap();
+}
+
+// ── Pan ────────────────────────────────────────
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('.card')) return;
+  isPanning = true;
+  panStartX = e.clientX - panX;
+  panStartY = e.clientY - panY;
+  canvas.classList.add('panning');
+  canvas.setPointerCapture(e.pointerId);
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (!isPanning) return;
+  panX = e.clientX - panStartX;
+  panY = e.clientY - panStartY;
+  applyTransform();
+});
+
+canvas.addEventListener('pointerup', () => {
+  isPanning = false;
+  canvas.classList.remove('panning');
+});
+
+// ── Zoom ───────────────────────────────────────
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.92 : 1.08;
+  const newZoom = Math.min(Math.max(zoom * delta, 0.15), 4);
+
+  // PERF: Zoom toward cursor position for natural feel
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  panX = mx - (mx - panX) * (newZoom / zoom);
+  panY = my - (my - panY) * (newZoom / zoom);
+  zoom = newZoom;
+
+  applyTransform();
+}, { passive: false });
+
+// ── Drag Cards ─────────────────────────────────
+inner.addEventListener('pointerdown', (e) => {
+  const card = e.target.closest('.card');
+  if (!card) return;
+  // A11Y: Don't drag when clicking checkboxes
+  if (e.target.tagName === 'INPUT') return;
+
+  dragTarget = card;
+  dragTarget.classList.add('dragging');
+  highestZ++;
+  dragTarget.style.zIndex = highestZ;
+
+  const cardRect = card.getBoundingClientRect();
+  dragOffsetX = (e.clientX - cardRect.left) / zoom;
+  dragOffsetY = (e.clientY - cardRect.top) / zoom;
+
+  card.setPointerCapture(e.pointerId);
+  e.stopPropagation();
+});
+
+inner.addEventListener('pointermove', (e) => {
+  if (!dragTarget) return;
+  const canvasRect = canvas.getBoundingClientRect();
+  const x = (e.clientX - canvasRect.left - panX) / zoom - dragOffsetX;
+  const y = (e.clientY - canvasRect.top - panY) / zoom - dragOffsetY;
+
+  // Snap to 12px grid for alignment
+  dragTarget.style.left = Math.round(x / 12) * 12 + 'px';
+  dragTarget.style.top = Math.round(y / 12) * 12 + 'px';
+
+  updateMinimap();
+});
+
+inner.addEventListener('pointerup', () => {
+  if (dragTarget) {
+    dragTarget.classList.remove('dragging');
+    dragTarget = null;
+  }
+});
+
+// ── Sticker Tray ───────────────────────────────
+function toggleStickerTray() {
+  stickerTrayOpen = !stickerTrayOpen;
+  const tray = document.getElementById('sticker-tray');
+  const toggle = document.getElementById('sticker-toggle');
+  tray.classList.toggle('open', stickerTrayOpen);
+  toggle.classList.toggle('active', stickerTrayOpen);
+}
+
+// NOTE: Close tray when clicking outside
+document.addEventListener('pointerdown', (e) => {
+  if (!stickerTrayOpen) return;
+  const tray = document.getElementById('sticker-tray');
+  const toggle = document.getElementById('sticker-toggle');
+  if (!tray.contains(e.target) && !toggle.contains(e.target)) {
+    stickerTrayOpen = false;
+    tray.classList.remove('open');
+    toggle.classList.remove('active');
+  }
+});
+
+// ── Add Sticker ────────────────────────────────
+function addSticker(modelKey) {
+  const model = AI_MODELS[modelKey];
+  if (!model) return;
+
+  const centerX = (window.innerWidth / 2 - panX) / zoom;
+  const centerY = (window.innerHeight / 2 - panY) / zoom;
+  highestZ++;
+
+  const card = document.createElement('div');
+  card.className = 'card card-sticker';
+  card.style.position = 'absolute';
+  card.style.left = Math.round(centerX / 12) * 12 + 'px';
+  card.style.top = Math.round(centerY / 12) * 12 + 'px';
+  card.style.zIndex = highestZ;
+  card.dataset.id = 'sticker-' + modelKey + '-' + Date.now();
+  card.dataset.model = modelKey;
+
+  card.innerHTML = `
+    <div class="sticker-accent" style="background: ${model.color};"></div>
+    <div class="sticker-dot" style="background: ${model.color};"></div>
+    <span class="sticker-name">${model.name}</span>
+  `;
+
+  inner.appendChild(card);
+  updateMinimap();
+
+  // DESIGN: Close tray after placing a sticker for clean flow
+  stickerTrayOpen = false;
+  document.getElementById('sticker-tray').classList.remove('open');
+  document.getElementById('sticker-toggle').classList.remove('active');
+}
+
+// ── Add Card ───────────────────────────────────
+function addCard(type) {
+  const centerX = (window.innerWidth / 2 - panX) / zoom;
+  const centerY = (window.innerHeight / 2 - panY) / zoom;
+  highestZ++;
+
+  const card = document.createElement('div');
+  card.style.position = 'absolute';
+  card.style.left = Math.round(centerX / 12) * 12 + 'px';
+  card.style.top = Math.round(centerY / 12) * 12 + 'px';
+  card.style.zIndex = highestZ;
+  card.dataset.id = 'card-' + Date.now();
+
+  if (type === 'panel') {
+    card.className = 'card card-panel';
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="card-icon" style="background: #F3F4F6;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+        </div>
+        <div>
+          <div class="card-title" contenteditable="true" style="outline:none;">New Card</div>
+          <div class="card-subtitle" contenteditable="true" style="outline:none; font-size:11px; color:#9ca3af;">subtitle</div>
+        </div>
+      </div>
+      <div class="card-body" contenteditable="true" style="outline:none; min-height:40px;">Type here...</div>
+    `;
+  } else if (type === 'sticky') {
+    const colors = ['sticky-yellow', 'sticky-green', 'sticky-blue', 'sticky-pink'];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const rotations = [-2, -1, 0.5, 1, 1.5, -1.5];
+    const rotation = rotations[Math.floor(Math.random() * rotations.length)];
+    card.className = `card card-sticky ${color}`;
+    card.style.transform = `rotate(${rotation}deg)`;
+    card.innerHTML = `<div contenteditable="true" style="outline:none; min-height:60px;">New note...</div>`;
+  } else if (type === 'label') {
+    card.className = 'card card-label';
+    card.innerHTML = `<h2 contenteditable="true" style="outline:none;">Section</h2>`;
+  }
+
+  inner.appendChild(card);
+  updateMinimap();
+}
+
+// ── Reset View ─────────────────────────────────
+function resetView() {
+  panX = 40;
+  panY = 20;
+  zoom = 1;
+  applyTransform();
+}
+
+// ── Minimap ────────────────────────────────────
+function updateMinimap() {
+  const minimap = document.getElementById('minimap');
+  const viewport = document.getElementById('minimap-viewport');
+  const mmW = minimap.offsetWidth;
+  const mmH = minimap.offsetHeight;
+
+  // Calculate bounds of all cards
+  const cards = inner.querySelectorAll('.card');
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+  cards.forEach(c => {
+    const l = parseFloat(c.style.left) || 0;
+    const t = parseFloat(c.style.top) || 0;
+    const w = c.offsetWidth || 200;
+    const h = c.offsetHeight || 100;
+    minX = Math.min(minX, l);
+    minY = Math.min(minY, t);
+    maxX = Math.max(maxX, l + w);
+    maxY = Math.max(maxY, t + h);
+  });
+
+  if (!isFinite(minX)) return;
+
+  const pad = 100;
+  minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+  const contentW = maxX - minX;
+  const contentH = maxY - minY;
+  const scale = Math.min(mmW / contentW, mmH / contentH);
+
+  // Update dots
+  minimap.querySelectorAll('.minimap-dot').forEach(d => d.remove());
+  cards.forEach(c => {
+    const dot = document.createElement('div');
+    dot.className = 'minimap-dot';
+    const l = parseFloat(c.style.left) || 0;
+    const t = parseFloat(c.style.top) || 0;
+    dot.style.left = ((l - minX) * scale) + 'px';
+    dot.style.top = ((t - minY) * scale) + 'px';
+    dot.style.width = Math.max(3, (c.offsetWidth || 100) * scale) + 'px';
+    dot.style.height = Math.max(2, (c.offsetHeight || 60) * scale) + 'px';
+    minimap.appendChild(dot);
+  });
+
+  // Viewport rect
+  const vx = (-panX / zoom - minX) * scale;
+  const vy = (-panY / zoom - minY) * scale;
+  const vw = (window.innerWidth / zoom) * scale;
+  const vh = (window.innerHeight / zoom) * scale;
+  viewport.style.left = vx + 'px';
+  viewport.style.top = vy + 'px';
+  viewport.style.width = vw + 'px';
+  viewport.style.height = vh + 'px';
+}
+
+// ── Keyboard shortcuts ─────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.target.isContentEditable || e.target.tagName === 'INPUT') return;
+  if (e.key === '0' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    resetView();
+  }
+  if (e.key === '=' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    zoom = Math.min(zoom * 1.15, 4);
+    applyTransform();
+  }
+  if (e.key === '-' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    zoom = Math.max(zoom * 0.87, 0.15);
+    applyTransform();
+  }
+  // NOTE: Escape closes sticker tray
+  if (e.key === 'Escape' && stickerTrayOpen) {
+    stickerTrayOpen = false;
+    document.getElementById('sticker-tray').classList.remove('open');
+    document.getElementById('sticker-toggle').classList.remove('active');
+  }
+});
+
+// ── Init ───────────────────────────────────────
+resetView();
+window.addEventListener('resize', updateMinimap);
+</script>
+</body>
+</html>
