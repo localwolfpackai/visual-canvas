@@ -1,0 +1,10 @@
+<svg viewBox="0 0 500 440" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Lupo Studios — /L merged monogram
+    Single continuous path. A's diagonal flows into L's vertical.
+    All strokes 90px uniform. Diagonal 90px perpendicular, 61.39° parallel edges.
+    Use fill="currentColor" or replace with brand color.
+    Locked in: 2026-04-09
+  -->
+  <path d="M240 0H330V350H500V440H247V175L103 440H0Z" fill="currentColor"/>
+</svg>
