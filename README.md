@@ -2,57 +2,70 @@
 
 A spatial canvas for organizing ideas, tools, and AI collaborations — built by Lupo Studios.
 
-This is the beginning of something I've wanted for a while: a freeform, infinite board where I can lay out everything I'm working with — tools, models, notes, architecture diagrams — and actually *see* how it all connects. Not a list. Not a dashboard. A space.
+Visual Canvas provides a freeform, infinite board to lay out everything you're working with: tools, models, notes, and architecture diagrams. It's not a list or a dashboard; it's a dedicated spatial environment that helps you actually *see* how everything connects.
 
-## Quick Start
+![Visual Canvas Screenshot](docs/screenshot.png)
 
-1. Clone or download this repo
-2. Open `index.html` in your browser
-3. That's it — no build step, no dependencies
+## Key Features
 
-## How It Works
+- **Infinite Spatial Environment**: Pannable and zoomable canvas to map out your entire workflow.
+- **Draggable Components**: Intuitive cards that snap to a 12px grid for perfect alignment.
+- **AI Model Sticker System**: Place brand-accurate AI model badges across your canvas.
+- **Real-time Minimap**: Easily navigate your canvas with a viewport minimap.
+- **Dot Grid Background**: A subtle background grid for precise spatial orientation.
+- **Modern Aesthetic**: Glass panel styling with backdrop blur and smooth entrance animations.
+- **Accessible & Zero Dependencies**: Respects `prefers-reduced-motion`, is keyboard navigable, and works entirely offline with zero build dependencies.
 
-- **Pan** the canvas by clicking and dragging the background
-- **Zoom** with scroll wheel (zooms toward your cursor)
-- **Drag** any card to reposition it — snaps to a 12px grid for alignment
-- **Toolbar** at top center to create new elements
-- **Keyboard shortcuts**: `Cmd+0` reset view, `Cmd+=` zoom in, `Cmd+-` zoom out
+## Tech Stack
 
-### Card Types
+- **HTML5**
+- **CSS3** (with CSS Variables & modern styling)
+- **Vanilla JavaScript** (Zero dependencies)
 
-- **Panel** — Glass-style cards with headers, icons, tags, and body text
-- **Sticky** — Colored notes with a handmade rotation feel (yellow, green, blue, pink)
-- **Label** — Large, faint section headers for organizing regions of the canvas
-- **Sticker** — Compact badge-style pills representing AI models, with brand colors and accent borders
+## Getting Started
 
-### AI Model Stickers
+Because Visual Canvas relies entirely on vanilla web technologies, getting started is extremely easy. No build steps, no package managers.
 
-Small draggable badges you can place anywhere on the canvas to attribute which AI model is involved in a workflow or tool. Currently includes: Claude, GPT, Gemini, Llama, Mistral, Grok, Copilot, and Codex. Open the sticker tray from the toolbar to place new ones.
+### 1. Clone the repository
+```bash
+git clone https://github.com/your-username/visual-canvas.git
+cd visual-canvas
+```
 
-## Features
+### 2. Run the application
+Start a local web server in the project directory.
 
-- Infinite pannable and zoomable canvas
-- Draggable cards with grid snapping
-- AI model sticker system with brand-accurate colors
-- Real-time minimap showing card positions and viewport
-- Dot grid background for spatial orientation
-- Glass panel aesthetic with backdrop blur throughout
-- Entrance animations with staggered delays
-- Accessible — respects `prefers-reduced-motion`, keyboard navigable
-- Zero dependencies — single HTML file, works offline
+Using Python 3:
+```bash
+python3 -m http.server 3000
+```
+
+Using Node.js (`serve`):
+```bash
+npx serve .
+```
+
+### 3. View the application
+Open your browser and navigate to `http://localhost:3000` to start organizing!
+
+## Usage Guide
+
+- **Pan**: Click and drag the canvas background.
+- **Zoom**: Use your scroll wheel (zooms toward your cursor).
+- **Drag**: Click and drag any card or sticker to reposition it.
+- **Toolbar**: Use the top-center toolbar to create new cards, sticky notes, labels, or stickers.
+- **Keyboard Shortcuts**:
+  - `Cmd+0` (or `Ctrl+0`): Reset view
+  - `Cmd+=` (or `Ctrl+=`): Zoom in
+  - `Cmd+-` (or `Ctrl+-`): Zoom out
 
 ## Roadmap
 
-This project is just getting started. Here's where it's headed:
-
-- **Save/load state** — persist card positions and content to localStorage or file export
-- **Connector lines** — draw relationships between cards with draggable bezier curves
-- **Image cards** — drop images onto the canvas as a new card type
-- **Paper MCP integration** — bridge this canvas with Paper for collaborative spatial design
-- **More sticker packs** — frameworks, languages, services, custom collections
-- **Grouping** — select multiple cards and move them as a cluster
-- **Search** — find cards by content across a large canvas
-- **Multiplayer** — real-time collaboration on the same board
+- **Save/load state**: Persist card positions and content to `localStorage` or file export.
+- **Connector lines**: Draw relationships between cards with draggable bezier curves.
+- **Image cards**: Drop images onto the canvas as a new card type.
+- **Grouping**: Select multiple cards and move them as a cluster.
+- **Search**: Find cards by content across a large canvas.
 
 ## License
 
